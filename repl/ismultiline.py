@@ -1,3 +1,6 @@
+import re
+from functools import wraps
+
 class Stack(list):
 
     def pop(self):
@@ -9,6 +12,34 @@ class Stack(list):
     def last(self):
         return self[-1] if len(self) > 0 else None
 
+    def empty(self):
+        return len(self) == 0
+
+
+class delete_nonterminals:
+
+    def __init__(self, terminals):
+        self.terminals = ''.join(terminals)
+
+    def nonterminals_regex(self):
+        return r"[^{}]+".format(re.escape(self.terminals))
+
+    def reject_escape_characters(self, string):
+        return re.sub( r"\\.", "", string)
+
+    def reject_nonterminals(self, string):
+        string = self.reject_escape_characters(string.strip())
+        string = re.sub(self.nonterminals_regex(), "", string)
+        return string
+
+    def __call__(self, func):
+        @wraps(func)
+        def wrapper(this, *args, **kwargs):
+            string = kwargs.get('string') or \
+                    next((s for s in args if type(s) is str), None)
+            return func(this, self.reject_nonterminals(string))
+        return wrapper
+
 
 class PushdownAutomata:
 
@@ -17,9 +48,6 @@ class PushdownAutomata:
 
     def __init__(self):
         self.stack = Stack()
-
-    def do_nothing(self):
-        pass
 
     def terminals(self):
         return set(self.brackets) | set(self.reverse_brackets)
@@ -35,14 +63,15 @@ class PushdownAutomata:
                 and self.invert_terminal(self.stack.last()) == character
 
     def next_state(self, character):
-        if character in self.brackets:
-            self.stack.push(character)
-        elif self.reverse_bracket(character):
+        if self.reverse_bracket(character):
             self.stack.pop()
+        elif character in self.brackets:
+            self.stack.push(character)
 
-    def command_ends(self, string):
-        for character in string:
-            pass
-        return True
+    @delete_nonterminals(set(brackets + reverse_brackets))
+    def command_ends(self, line):
+        for character in line:
+            self.next_state(character)
+        return self.stack.empty()
         
 

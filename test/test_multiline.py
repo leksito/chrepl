@@ -1,6 +1,24 @@
 import unittest
 from repl import ismultiline
 
+def terminals():
+    return ''.join(set(ismultiline.PushdownAutomata.brackets +\
+            ismultiline.PushdownAutomata.reverse_brackets))
+
+class DeleteNonterminals(unittest.TestCase):
+
+    @ismultiline.delete_nonterminals(terminals())
+    def get_string(self, string):
+        return string
+
+    def test_delete_nonterminals(self):
+        string = """
+        function() { console.log("Hello \\"world\\""); }
+        """
+        string = self.get_string(string)
+        self.assertEqual(string, '(){("")}')
+
+
 class TestTest(unittest.TestCase):
     def setUp(self):
         self.automata = ismultiline.PushdownAutomata()
@@ -53,3 +71,29 @@ class TestTest(unittest.TestCase):
 
         result = self.automata.next_state("]")
         self.assertListEqual(self.automata.stack, [])
+
+        result = self.automata.next_state("\"")
+        self.assertListEqual(self.automata.stack, ["\""])
+
+        result = self.automata.next_state("\"")
+        self.assertListEqual(self.automata.stack, [])
+
+        result = self.automata.next_state("\'")
+        self.assertListEqual(self.automata.stack, ["\'"])
+
+        result = self.automata.next_state("\'")
+        self.assertListEqual(self.automata.stack, [])
+
+    def test_command_ends(self):
+        command = """
+        function() {
+            console.log("Hello \\"world\\"")
+        """
+        for line in filter(None, map(lambda x: x.strip(), command.split("\n"))):
+            self.assertFalse(self.automata.command_ends(line))
+        self.assertTrue(self.automata.command_ends("}"))
+        print("end")
+        
+
+
+
