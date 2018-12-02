@@ -1,5 +1,6 @@
 import re
 from functools import wraps
+from util import Singleton
 
 class Stack(list):
 
@@ -41,7 +42,7 @@ class delete_nonterminals:
         return wrapper
 
 
-class PushdownAutomata:
+class PushdownAutomata(Singleton):
 
     brackets = [ "\"", "'", "[", "{", "(", ]
     reverse_brackets = [ "\"", "'", "]", "}", ")", ]
