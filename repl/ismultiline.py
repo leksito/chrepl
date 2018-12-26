@@ -1,6 +1,6 @@
 import re
 from functools import wraps
-from util import Singleton
+from .util import Singleton
 
 class Stack(list):
 
@@ -49,6 +49,7 @@ class PushdownAutomata(Singleton):
 
     def __init__(self):
         self.stack = Stack()
+        self.current_command = []
 
     def terminals(self):
         return set(self.brackets) | set(self.reverse_brackets)
@@ -74,5 +75,3 @@ class PushdownAutomata(Singleton):
         for character in line:
             self.next_state(character)
         return self.stack.empty()
-        
-

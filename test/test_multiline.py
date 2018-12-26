@@ -38,6 +38,7 @@ class TestTest(unittest.TestCase):
         self.automata.stack.push(1)
         self.assertEqual(self.automata.stack.last(), 1,
                 'last element must be 1')
+        self.automata.stack.pop()
 
     def test_is_terminal(self):
         self.assertTrue(self.automata.is_terminal("\""))

@@ -8,18 +8,19 @@ historyfile_size = 1000
 
 class Console(cmd.Cmd):
 
-    prompt = ' > '
+    # prompt = ' > '
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_command = []
 
+    def precmd(self, line):
+        return line
+
     def default(self, line):
         self.current_command.append(line)
         if PushdownAutomata().command_ends(line):
-            print(PushdownAutomata().command_ends(line))
             self.prompt = ' > '
-            print(''.join(self.current_command))
             self.current_command = []
         else:
             self.prompt = '...'
