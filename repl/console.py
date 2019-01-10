@@ -1,14 +1,14 @@
 import cmd
 import readline
 import os
-from ismultiline import PushdownAutomata
+from .ismultiline import PushdownAutomata
 
 historyfile = os.path.expanduser('~/.chromerepl_history')
 historyfile_size = 1000
 
 class Console(cmd.Cmd):
 
-    # prompt = ' > '
+    prompt = ' > '
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -48,4 +48,3 @@ class Console(cmd.Cmd):
 
 if __name__ == '__main__':
     Console().cmdloop()
-
