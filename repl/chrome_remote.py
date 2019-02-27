@@ -87,15 +87,19 @@ class ChromeRemote(object):
             raise RuntimeException("session id is not specified, choose your target")
         self.current_id += 1
         self.receive_loop.method_results[self.current_id] = queue.Queue()
+
+        method_message = json.dumps({
+            'id': self.current_id+500,
+            'method': method,
+            'params': params,
+            'sessionId': self.session_id
+        })
         message = json.dumps({
             'id': self.current_id,
             'method': 'Target.sendMessageToTarget',
             'params': {
-                'message': {
-                    'method': method,
-                    'params': params
-                },
-                'sessionId': self.session_id
+                'sessionId': self.session_id,
+                'message': method_message
             }
         })
         print(message)
@@ -112,9 +116,29 @@ class ChromeRemote(object):
         }))
         return self.receive_loop.method_results[self.current_id].get()
 
+    def attach_to_browser_target(self):
+        # it does not work
+        # https://github.com/ChromeDevTools/devtools-protocol/issues/160
+        self.send_to_browser('Target.attachToBrowserTarget')
+
+    def get_tabs(self):
+        rp = requests.get("{}/json/list".format(self.dev_url), json=True)
+        return rp.json()
+
+    def choose_tab(self):
+
+
+
+
+
+    
+
+    
+
 
 cr = ChromeRemote()
 import ipdb; ipdb.set_trace()
-rs = cr.send_to_browser('Target.attachToBrowserTarget')
-rs = cr.send_to_session('Page.navigate', url='http://www.tmall.com')
-print("done")
+
+cr.choose_tab()
+
+
