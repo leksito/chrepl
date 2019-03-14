@@ -6,29 +6,39 @@ from .ismultiline import PushdownAutomata
 historyfile = os.path.expanduser('~/.chromerepl_history')
 historyfile_size = 1000
 
-class Console(cmd.Cmd):
+class Cmd(cmd.Cmd):
 
     prompt = ' > '
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.current_command = []
+        self.command_lines = []
+        self._command_ends = True
 
-    def precmd(self, line):
-        return line
+    def postcmd(self, stop, line):
+        self.command_lines.append(line)
+        if PushdownAutomata().command_ends(line):
+            self.command_lines = []
+            self.command_ended
+        else:
+            self._command_ends = False
+        self.prompt = ' > ' if self.is_command_ends() else '...'
+        return False
+
+    def end_command(self):
+        self._command_ends = True
+
+    def end_command(self):
+        self._command_ends = False
+
+    def is_command_ended(self):
+        return self._command_ends
 
     def default(self, line):
-        self.current_command.append(line)
-        if PushdownAutomata().command_ends(line):
-            self.prompt = ' > '
-            self.current_command = []
-        else:
-            self.prompt = '...'
-    
-    def postcmd(self, stop, line):
-        if line == 'exit':
-            return True
-        return False
+        pass
+
+    def get_command(self):
+        return '\n'.join(self.command_lines)
 
     def configure_command_history(self):
         if readline and os.path.exists(historyfile):
@@ -47,4 +57,4 @@ class Console(cmd.Cmd):
 
 
 if __name__ == '__main__':
-    Console().cmdloop()
+    Cmd().cmdloop()

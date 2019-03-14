@@ -123,22 +123,25 @@ class ChromeRemote(object):
 
     def get_tabs(self):
         rp = requests.get("{}/json/list".format(self.dev_url), json=True)
-        return rp.json()
+        return [ tab for tab in rp.json() if tab['type'] == 'page' ]
 
-    def choose_tab(self):
-
-
-
-
-
-    
+    def choose_tab(self, target_id):
+        self.send_to_browser('Target.attachToTarget', targetId=target_id)
 
     
 
 
-cr = ChromeRemote()
-import ipdb; ipdb.set_trace()
+if __name__ == '__main__':
+    cr = ChromeRemote()
 
-cr.choose_tab()
+    tabs = cr.get_tabs()
+    target_id = tabs[0]['id']
 
+    cr.choose_tab(target_id)
 
+    cr.send_to_session('Page.navigate', url="https://www.tut.by")
+
+    cr.attach_to_browser_target()
+    cr.send_to_session('Page.navigate', url="https://www.tut.by")
+
+    print("done")
