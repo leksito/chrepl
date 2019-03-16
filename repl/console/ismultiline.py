@@ -5,10 +5,10 @@ from .util import Singleton
 class Stack(list):
 
     def pop(self):
-        return super().pop() if len(self) > 0 else None
+        return super(Stack, self).pop() if len(self) > 0 else None
 
     def push(self, *args, **kwargs):
-        super().append(*args, **kwargs)
+        super(Stack, self).append(*args, **kwargs)
 
     def last(self):
         return self[-1] if len(self) > 0 else None

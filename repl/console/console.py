@@ -3,16 +3,21 @@ import readline
 import os
 from .ismultiline import PushdownAutomata
 
+import code, ctypes, readline, blessings
+from pygments import highlight
+from pygments.formatters import TerminalFormatter
+from pygments.lexers import JavascriptLexer
+
 historyfile = os.path.expanduser('~/.chromerepl_history')
 historyfile_size = 1000
 
-PROMPT = ' >>> '
-MLINE_PROMPT = ' ... '
+PROMPT = '>>> '
+MLINE_PROMPT = '... '
 INTRO = """
 Intro
 """
 
-class Cmd2:
+class Cmd:
 
     def __init__(self, completer=None, completekey='tab'):
         self.prompt = PROMPT
@@ -23,6 +28,33 @@ class Cmd2:
             self.set_completer(self.default_completer, completekey)
         self.configure_command_history()
         self.save_command_history_to_file()
+
+    def hook_ptr(self):
+        if not hasattr(self, '_hook_ptr'):
+            self._hook_ptr = ctypes.c_void_p.in_dll(ctypes.pythonapi,"PyOS_InputHook")
+        return self._hook_ptr
+
+    def enable_highlighting(self):
+        terminal = blessings.Terminal()
+        lexer = JavascriptLexer()
+        formatter = TerminalFormatter()
+
+        def draw():  
+            raw_line = readline.get_line_buffer()
+            line = highlight(raw_line, lexer, formatter)[:-1]
+
+            with terminal.location(x = 4):
+                print(line)
+            readline.redisplay()
+            return 0
+
+        self.input_hook = ctypes.PYFUNCTYPE(ctypes.c_int)(draw)
+        self.default_input_hook = self.hook_ptr.value
+        self.hook_ptr.value = ctypes.cast(callback, ctypes.c_void_p).value
+
+    def disable_highlighting(self):
+        if hasattr(self, 'default_input_hook') and hasattr(self, 'hook_ptr'):
+            self.hook_ptr.value = self.default_input_hook
 
     def default_completer(self, text, state):
         if state == 0:
@@ -37,7 +69,6 @@ class Cmd2:
             return self.matches[state]
         except IndexError:
             return None
-
 
     def configure_command_history(self):
         if readline and os.path.exists(historyfile):
@@ -59,14 +90,17 @@ class Cmd2:
 
     def get_command(self):
         lines = []
+        readline.set_startup_hook()
         while True:
-            line = input(self.prompt)
+            line = raw_input(self.prompt)
             lines.append(line)
             if PushdownAutomata().command_ends(line):
                 self.prompt = PROMPT
                 return '\n'.join(lines)
             else:
                 self.prompt = MLINE_PROMPT
+            indentation = " " * 4 * len(PushdownAutomata().stack)
+            readline.set_startup_hook(lambda: readline.insert_text(indentation))
 
     def cmd_generator(self):
         try:
@@ -77,56 +111,3 @@ class Cmd2:
             return
         finally:
             self.restore_completer()
-
-
-
-
-class Cmd(cmd.Cmd):
-
-    prompt = ' > '
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.command_lines = []
-        self._command_ends = True
-
-    def postcmd(self, stop, line):
-        self.command_lines.append(line)
-        if PushdownAutomata().command_ends(line):
-            self.command_lines = []
-            self.command_ended
-        else:
-            self._command_ends = False
-        self.prompt = ' > ' if self.is_command_ends() else '...'
-        return False
-
-    def end_command(self):
-        self._command_ends = True
-
-    def end_command(self):
-        self._command_ends = False
-
-    def is_command_ended(self):
-        return self._command_ends
-
-    def default(self, line):
-        pass
-
-    def get_command(self):
-        return '\n'.join(self.command_lines)
-
-    def configure_command_history(self):
-        if readline and os.path.exists(historyfile):
-            readline.read_history_file(historyfile)
-
-    def save_command_history_to_file(self):
-        if readline:
-            readline.set_history_length(historyfile_size)
-            readline.write_history_file(historyfile)
-
-    def preloop(self):
-        self.configure_command_history()
-
-    def postloop(self):
-        self.save_command_history_to_file()
-
