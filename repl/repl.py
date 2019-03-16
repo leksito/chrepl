@@ -1,4 +1,4 @@
-from console import Cmd
+from console import Cmd2, Cmd
 
 
 class Repl(Cmd):
@@ -19,4 +19,6 @@ class Repl(Cmd):
 
 
 if __name__ == '__main__':
-    Repl().cmdloop()
+    # Repl().cmdloop()
+    for command in Cmd2().cmd_generator():
+        print(command)
