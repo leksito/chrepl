@@ -134,6 +134,8 @@ class ChromeRemote(object):
 if __name__ == '__main__':
     cr = ChromeRemote()
 
+    import ipdb; ipdb.set_trace()
+
     tabs = cr.get_tabs()
     target_id = tabs[0]['id']
 

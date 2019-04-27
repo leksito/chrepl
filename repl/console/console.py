@@ -1,7 +1,7 @@
-import cmd
-import readline
-import os
+import cmd, readline, os, signal
+
 from .ismultiline import PushdownAutomata
+from .highlighting import Highlighting
 
 import code, ctypes, readline, blessings
 from pygments import highlight
@@ -17,6 +17,12 @@ INTRO = """
 Intro
 """
 
+def keyboard_interrupt(c, frame):
+    return
+
+signal.signal(signal.SIGINT, keyboard_interrupt)
+
+
 class Cmd:
 
     def __init__(self, completer=None, completekey='tab'):
@@ -29,32 +35,7 @@ class Cmd:
         self.configure_command_history()
         self.save_command_history_to_file()
 
-    def hook_ptr(self):
-        if not hasattr(self, '_hook_ptr'):
-            self._hook_ptr = ctypes.c_void_p.in_dll(ctypes.pythonapi,"PyOS_InputHook")
-        return self._hook_ptr
-
-    def enable_highlighting(self):
-        terminal = blessings.Terminal()
-        lexer = JavascriptLexer()
-        formatter = TerminalFormatter()
-
-        def draw():  
-            raw_line = readline.get_line_buffer()
-            line = highlight(raw_line, lexer, formatter)[:-1]
-
-            with terminal.location(x = 4):
-                print(line)
-            readline.redisplay()
-            return 0
-
-        self.input_hook = ctypes.PYFUNCTYPE(ctypes.c_int)(draw)
-        self.default_input_hook = self.hook_ptr.value
-        self.hook_ptr.value = ctypes.cast(callback, ctypes.c_void_p).value
-
-    def disable_highlighting(self):
-        if hasattr(self, 'default_input_hook') and hasattr(self, 'hook_ptr'):
-            self.hook_ptr.value = self.default_input_hook
+        Highlighting().disable()
 
     def default_completer(self, text, state):
         if state == 0:
@@ -92,8 +73,12 @@ class Cmd:
         lines = []
         readline.set_startup_hook()
         while True:
-            line = raw_input(self.prompt)
-            lines.append(line)
+            try:
+                line = raw_input(self.prompt)
+                lines.append(line)
+            except EOFError:
+                print("\n")
+                exit(0)
             if PushdownAutomata().command_ends(line):
                 self.prompt = PROMPT
                 return '\n'.join(lines)
@@ -108,6 +93,7 @@ class Cmd:
             while True:
                 yield self.get_command()
         except KeyboardInterrupt:
+            self.disable_highlighting()
             return
         finally:
             self.restore_completer()
