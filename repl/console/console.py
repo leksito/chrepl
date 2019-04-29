@@ -35,7 +35,7 @@ class Cmd:
         self.configure_command_history()
         self.save_command_history_to_file()
 
-        Highlighting().disable()
+        Highlighting().enable()
 
     def default_completer(self, text, state):
         if state == 0:
