@@ -20,7 +20,7 @@ class Choice:
     def ask(self):
         print(self.question())
         answer = input(self.prompt)
-        if answer.isdigit() and int(answer) in range(0, len(self.answers)):
+        if type(answer) == int and int(answer) in range(0, len(self.answers)):
             index = int(answer)
             return index, self.answers[index]
         elif answer in self.answers:
