@@ -7,3 +7,13 @@ class _Singleton(type):
         return cls._instances[cls]
 
 class Singleton(_Singleton('SingletonMeta', (object,), {})): pass
+
+
+import threading
+
+print_mutex = threading.Lock()
+
+def locked_print(message):
+    print_mutex.acquire()
+    print(message)
+    print_mutex.release()

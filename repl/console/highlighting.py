@@ -1,34 +1,62 @@
-import os, signal, ctypes, blessings, readline
-
-from .util import Singleton
-
+import os, signal, ctypes, blessings, readline, sys, time, threading
+#
 from pygments import highlight
 from pygments.formatters import TerminalFormatter
 from pygments.lexers import JavascriptLexer
 
-class Highlighting(Singleton):
+# terminal = blessings.Terminal()
+# lexer = JavascriptLexer()
+# formatter = TerminalFormatter()
+#
+# def slight_delay():
+#     threading.Timer(0.001, draw).start()
+#     return 0
+#
+# def draw():
+#     raw_line = readline.get_line_buffer().replace("\n", "")
+#     if len(raw_line) == 0:
+#         return 0
+#     line = highlight(raw_line, lexer, formatter)[:-1].replace("\n", "")
+#
+#     # print(line)
+#     sys.stdout.write("\r" + ">>> " + line)
+#     sys.stdout.flush()
+#
+#     readline.redisplay()
+#     return 0
+#
+# def keyboard_interrupt(c, frame):   # Ctrl-C throws in C code otherwise
+#     pass
+#
+# input_hook = ctypes.PYFUNCTYPE(ctypes.c_int)(draw)
+# hook_ptr = ctypes.c_void_p.in_dll(ctypes.pythonapi,"PyOS_InputHook")
+# hook_ptr.value = ctypes.cast(input_hook, ctypes.c_void_p).value
+# signal.signal(signal.SIGINT, keyboard_interrupt)
 
-    def __init__(self):
-        self.terminal = blessings.Terminal()
-        self.lexer = JavascriptLexer()
-        self.formatter = TerminalFormatter()
 
-        hook_ptr = ctypes.c_void_p.in_dll(ctypes.pythonapi,"PyOS_InputHook")
-        input_hook = ctypes.PYFUNCTYPE(ctypes.c_int)(self.draw)
-        hook_ptr.value = ctypes.cast(input_hook, ctypes.c_void_p).value
 
-    def draw(self):  
-        if hasattr(self, 'highlighting') and self.highlighting:
-            raw_line = readline.get_line_buffer()
-            line = highlight(raw_line, self.lexer, self.formatter)[:-1]
+def slight_delay():
+    threading.Timer(0.001, draw).start()
+    return 0
 
-            with self.terminal.location(x = 4):
-                print(line)
-            readline.redisplay()
-        return 0
+def draw():
+    raw_line = readline.get_line_buffer()
+    line = highlight(raw_line, lexer, formatter)[:-1]
 
-    def enable(self):
-        self.highlighting = True
+    with lock:
+        with terminal.location(x = 4):
+            print line,
+        readline.redisplay()
 
-    def disable(self):
-        self.highlighting = False
+def keyboard_interrupt(c, frame):   # Ctrl-C throws in C code otherwise
+    pass
+
+callback = ctypes.PYFUNCTYPE(ctypes.c_int)(slight_delay)
+hook_ptr = ctypes.c_void_p.in_dll(ctypes.pythonapi,"PyOS_InputHook")
+hook_ptr.value = ctypes.cast(callback, ctypes.c_void_p).value
+signal.signal(signal.SIGINT, keyboard_interrupt)
+
+terminal = blessings.Terminal()
+lexer = JavascriptLexer()
+formatter = TerminalFormatter()
+lock = threading.Lock()

@@ -1,7 +1,7 @@
 import cmd, readline, os, signal
 
 from .ismultiline import PushdownAutomata
-from .highlighting import Highlighting
+import highlighting
 
 import code, ctypes, readline, blessings
 from pygments import highlight
@@ -35,7 +35,7 @@ class Cmd:
         self.configure_command_history()
         self.save_command_history_to_file()
 
-        Highlighting().enable()
+        # Highlighting().enable()
 
     def default_completer(self, text, state):
         if state == 0:
