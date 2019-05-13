@@ -11,10 +11,9 @@ from pygments.lexers import JavascriptLexer
 historyfile = os.path.expanduser('~/.chromerepl_history')
 historyfile_size = 1000
 
-PROMPT = '>>> '
-MLINE_PROMPT = '... '
+PROMPT = ' > '
+MLINE_PROMPT = ' . '
 INTRO = """
-Intro
 """
 
 def keyboard_interrupt(c, frame):

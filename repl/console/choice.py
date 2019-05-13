@@ -1,3 +1,5 @@
+from termcolor import colored
+
 class WrongAnswer(Exception):
 
     def __init__(self, message, answer, asnwers):
@@ -14,11 +16,12 @@ class Choice:
         self.prompt = prompt
 
     def question(self):
-        options = [" {}. - {}".format(i, a) for i, a in enumerate(self.answers)]
+        options = [" {}. {}".format(i, a) for i, a in enumerate(self.answers)]
         return "{}\n\n{}\n".format(self.title, '\n'.join(options))
 
     def ask(self):
-        print(self.question())
+        print()
+        print(colored(self.question(), attrs=['bold']))
         answer = input(self.prompt)
         if type(answer) == int and int(answer) in range(0, len(self.answers)):
             index = int(answer)

@@ -81,7 +81,6 @@ class ChromeRemote(object):
         def attached_target(**kwargs):
             session_id = kwargs.get("sessionId", None)
             self.session = Session(session_id, self)
-            print("Attached to tab. SessionID: {}".format(self.session.id))
 
         def detached_target(**kwargs):
             import sys
@@ -202,14 +201,13 @@ class Session:
             self.browser.send('Target.sendMessageToTarget', block=block,
                             sessionId=self.id, message=message)
             result = self.results[self.action_id].get()
-            print "Result:"
-            print result
             return result['result']
         finally:
             self.results.pop(self.action_id)
 
     def evaluate(self, expression):
-        return self.send('Runtime.evaluate', expression=expression)
+        return self.send('Runtime.evaluate', expression=expression,
+            includeCommandLineAPI=True)
 
 
 if __name__ == '__main__':

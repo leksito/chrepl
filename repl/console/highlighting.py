@@ -44,7 +44,7 @@ def draw():
     line = highlight(raw_line, lexer, formatter)[:-1]
 
     with lock:
-        with terminal.location(x = 4):
+        with terminal.location(x = 3):
             print line,
         readline.redisplay()
 

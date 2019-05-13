@@ -9,7 +9,8 @@ import abc, sys, json, re
 
 from pygments import highlight
 from pygments.formatters import TerminalFormatter
-from pygments.lexers import JavascriptLexer
+from pygments.lexers import JavascriptLexer, HtmlLexer
+
 
 class Executor(object):
     """Command interface"""
@@ -115,15 +116,50 @@ class ObjectOutputHandler(object):
             'value': value
         }
 
+    def process_node(self, result):
+        class_name = result['className']
+
+        object_id = result['objectId']
+        node = chrome_client.session.send('DOM.describeNode', objectId=object_id)['node']
+
+        local_name = node['localName']
+
+        attrs = node['attributes']
+        attrs = " ".join(["{}=\"{}\"".format(attrs[i], attrs[i+1]) for i in range(0, len(attrs), 2)])
+        value = "<{} {}>".format(local_name, attrs)
+
+        #highlight node
+
+        highlightConfig = {
+            "showInfo": True,
+            "showRulers":False,
+            "showExtensionLines":False,
+            "contentColor":{"r":111,"g":168,"b":220,"a":0.66},
+            "paddingColor":{"r":147,"g":196,"b":125,"a":0.55},
+            "borderColor":{"r":255,"g":229,"b":153,"a":0.66},
+            "marginColor":{"r":246,"g":178,"b":107,"a":0.66},
+            "eventTargetColor":{"r":255,"g":196,"b":196,"a":0.66},
+            "shapeColor":{"r":96,"g":82,"b":177,"a":0.8},
+            "shapeMarginColor":{"r":96,"g":82,"b":127,"a":0.6},
+            "displayAsMaterial":True
+        };
+
+        chrome_client.session.send("DOM.highlightNode", objectId=object_id,
+            highlightConfig=highlightConfig)
+
+        return {
+            'class_name': class_name,
+            'value': value
+        }
+
     def process(self, result):
-        __import__('ipdb').set_trace()
         subtype = result.get('subtype', None)
         if subtype and subtype == 'error':
             return self.process_error(result)
+        elif subtype and subtype == 'node':
+            return self.process_node(result)
         else:
             return self.process_object(result)
-
-
 
 
 class FunctionOutputHandler(object):
@@ -196,28 +232,30 @@ def console_log(**event):
     if not message:
         return None
     elif message['level'] == 'log':
-        locked_print(message['text'])
+        locked_print(" < " + message['text'])
     elif message['level'] == 'warning':
-        text = colored(message['text'], 'yellow')
+        text = colored(" < " + message['text'], 'yellow')
         locked_print(text)
     elif message['level'] == 'error':
-        text = colored(message['text'], 'red')
+        text = colored(" < " + message['text'], 'red')
         locked_print(text)
     elif message['level'] == 'debug':
-        text = colored(message['text'], 'grey')
+        text = colored(" < " + message['text'], 'green')
         locked_print(text)
     elif message['level'] == 'info':
-        text = colored(message['text'], 'blue')
+        text = colored(" < " + message['text'], 'blue')
         locked_print(text)
 
 
-lexer = JavascriptLexer()
+js_lexer = JavascriptLexer()
+html_lexer = HtmlLexer()
 formatter = TerminalFormatter()
 
 def pretty_print(class_name=None, value=None):
     class_name = colored("[ {} ]".format(class_name), 'yellow') if class_name else None
     if type(value) == dict:
         value = json.dumps(value)
+    lexer = html_lexer if "HTML" in class_name else js_lexer
     value = highlight(str(value), lexer, formatter)[:-1]
     output = filter(lambda out: out != None, [class_name, value])
     locked_print(" ".join(output))
@@ -227,7 +265,15 @@ if __name__ == '__main__':
     chrome_client = ChromeRemote()
     tabs = chrome_client.get_tabs()
 
-    answers = ["{} - {}".format(x['title'].encode('utf-8'), x['url'][0:15]) for x in tabs]
+    # answers = ["{} {}".format(x['title'].encode('utf-8')[:25], colored(x['url'], 'blue')) for x in tabs]
+    answers = []
+    for tab in tabs:
+        name = colored(tab['title'].encode('utf-8')[:25], attrs=['bold'])
+        url = colored(tab['url'], 'blue')
+        answer = "{} - {}".format(name, url)
+        answers.append(answer)
+
+
     choice = Choice(title="Choose target tab:", answers=answers).ask()
 
     target_id = tabs[choice[0]]['id']
@@ -237,6 +283,7 @@ if __name__ == '__main__':
 
     chrome_client.session.send('Console.enable')
     chrome_client.session.send('Debugger.enable')
+    chrome_client.session.send('DOM.enable')
 
     chrome_client.session.on('Console.messageAdded', console_log)
 
@@ -246,7 +293,6 @@ if __name__ == '__main__':
     from console import Cmd
     for command in Cmd().cmd_generator():
         result = command_factory.execute(command)
-        __import__('ipdb').set_trace()
         output = output_factory.process(result['result']) or {}
         pretty_print(**output)
 
