@@ -1,6 +1,7 @@
 import re
 from functools import wraps
-from .util import Singleton
+
+from chrepl.common.util import Singleton
 
 class Stack(list):
 

@@ -1,3 +1,5 @@
+import threading
+
 class _Singleton(type):
     """ A metaclass that creates a Singleton base class when called. """
     _instances = {}
@@ -9,10 +11,7 @@ class _Singleton(type):
 class Singleton(_Singleton('SingletonMeta', (object,), {})): pass
 
 
-import threading
-
 print_mutex = threading.Lock()
-
 def locked_print(message):
     print_mutex.acquire()
     print(message)

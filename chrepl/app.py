@@ -1,7 +1,8 @@
 from functools import wraps
 
-from console import Choice, locked_print
-from commands.chrome_remote import ChromeRemote
+from chrepl.console import Choice
+from chrepl.common.util import locked_print
+from chrepl.chrome_remote import ChromeRemote
 
 from termcolor import colored
 
@@ -261,7 +262,7 @@ def pretty_print(class_name=None, value=None):
     locked_print(" ".join(output))
 
 
-if __name__ == '__main__':
+def run():
     chrome_client = ChromeRemote()
     tabs = chrome_client.get_tabs()
 
