@@ -120,17 +120,35 @@ class ChromeRemote(object):
         finally:
             self.receive_loop.method_results.pop(self.action_id)
 
+    def flatten_send(self, method, session_id, block=True, timeout=None, **params):
+        try:
+            self.action_id += 1
+            self.receive_loop.method_results[self.action_id] = queue.Queue()
+            message = {
+                'sessionId': session_id,
+                'id': self.action_id,
+                'method': method,
+                'params': params
+            }
+            self._ws.send(json.dumps(message).encode('utf-8'))
+            return self.receive_loop.method_results[self.action_id].get(
+                block=block, timeout=timeout)['result']
+        except queue.Empty:
+            return None
+        finally:
+            self.receive_loop.method_results.pop(self.action_id)
+
     def attach_to_browser_target(self):
         # it does not work
         # https://github.com/ChromeDevTools/devtools-protocol/issues/160
-        self.send('Target.attachToBrowserTarget')
+        self.send('Target.attachToBrowserTarget', flatten=True)
 
     def get_tabs(self):
         rp = requests.get("{}/json/list".format(self.dev_url), json=True)
         return [ tab for tab in rp.json() if tab['type'] == 'page' ]
 
-    def choose_tab(self, target_id):
-        self.send('Target.attachToTarget', targetId=target_id)
+    def choose_tab(self, target_id, flatten=True):
+        self.send('Target.attachToTarget', targetId=target_id, flatten=flatten)
 
 
 class SessionEventHandler(EventHandler):
@@ -205,6 +223,23 @@ class Session:
         finally:
             self.results.pop(self.action_id)
 
+    def flatten_send(self, method, block=True, timeout=None, **params):
+        try:
+            self.action_id += 1
+            self.results[self.action_id] = queue.Queue()
+
+            #message = json.dumps({
+            #    'sessionId': self.id,
+            #    'id': self.action_id,
+            #    'method': method,
+            #    'params': params
+            #})
+            self.browser.flatten_send(method, self.id, block=block, **params)
+            result = self.results[self.action_id].get()
+            return result['result']
+        finally:
+            self.results.pop(self.action_id)
+
     def evaluate(self, expression):
         return self.send('Runtime.evaluate', expression=expression,
             includeCommandLineAPI=True)
@@ -212,11 +247,15 @@ class Session:
 
 if __name__ == '__main__':
     cr = ChromeRemote()
+    import ipdb; ipdb.set_trace()
+
+    #cr.attach_to_browser_target()
 
 
     tabs = cr.get_tabs()
     target_id = tabs[0]['id']
 
-    cr.choose_tab(target_id)
+    cr.choose_tab(target_id, flatten=True)
+    cr.session.flatten_send('Page.navigate', url="https://www.google.com")
 
     cr.session.send('Page.navigate', url="https://www.tut.by")

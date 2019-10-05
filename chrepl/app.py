@@ -121,7 +121,7 @@ class ObjectOutputHandler(object):
         class_name = result['className']
 
         object_id = result['objectId']
-        node = chrome_client.session.send('DOM.describeNode', objectId=object_id)['node']
+        node = self.chrome_client.session.send('DOM.describeNode', objectId=object_id)['node']
 
         local_name = node['localName']
 
@@ -145,7 +145,7 @@ class ObjectOutputHandler(object):
             "displayAsMaterial":True
         };
 
-        chrome_client.session.send("DOM.highlightNode", objectId=object_id,
+        self.chrome_client.session.send("DOM.highlightNode", objectId=object_id,
             highlightConfig=highlightConfig)
 
         return {
@@ -233,19 +233,23 @@ def console_log(**event):
     if not message:
         return None
     elif message['level'] == 'log':
-        locked_print(" < " + message['text'])
+        color = "white"
+        prefix = "[ LOG ]"
     elif message['level'] == 'warning':
-        text = colored(" < " + message['text'], 'yellow')
-        locked_print(text)
+        color = 'yellow'
+        prefix = "[ WARNING ]"
     elif message['level'] == 'error':
-        text = colored(" < " + message['text'], 'red')
-        locked_print(text)
+        color = 'red'
+        prefix = "[ ERROR ]"
     elif message['level'] == 'debug':
-        text = colored(" < " + message['text'], 'green')
-        locked_print(text)
+        color = 'green'
+        prefix = "[ DEBUG ]"
     elif message['level'] == 'info':
-        text = colored(" < " + message['text'], 'blue')
-        locked_print(text)
+        color = 'blue'
+        prefix = "[ INFO ]"
+
+    text = colored(" ".join([prefix, message['text']]), color) 
+    locked_print(text)
 
 
 js_lexer = JavascriptLexer()
@@ -253,7 +257,7 @@ html_lexer = HtmlLexer()
 formatter = TerminalFormatter()
 
 def pretty_print(class_name=None, value=None):
-    class_name = colored("[ {} ]".format(class_name), 'yellow') if class_name else None
+    class_name = colored("[ {} ]".format(class_name), 'yellow') if class_name else ""
     if type(value) == dict:
         value = json.dumps(value)
     lexer = html_lexer if "HTML" in class_name else js_lexer
@@ -266,7 +270,6 @@ def run():
     chrome_client = ChromeRemote()
     tabs = chrome_client.get_tabs()
 
-    # answers = ["{} {}".format(x['title'].encode('utf-8')[:25], colored(x['url'], 'blue')) for x in tabs]
     answers = []
     for tab in tabs:
         name = colored(tab['title'].encode('utf-8')[:25], attrs=['bold'])
