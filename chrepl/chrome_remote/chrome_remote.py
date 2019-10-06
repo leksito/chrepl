@@ -108,17 +108,47 @@ class ChromeRemote(object):
         try:
             self.action_id += 1
             self.receive_loop.method_results[self.action_id] = queue.Queue()
-            self._ws.send(json.dumps({
+            message = {
                 'id': self.action_id,
                 'method': method,
                 'params': params
-            }))
-            return self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)['result']
+            }
+            self._ws.send(json.dumps(message))
+            received_message = self.receive_loop.method_results[self.action_id].get(
+                block=block, timeout=timeout)
+            if received_message.has_key('error'):
+                raise Exception("Error when message sent: {}\n Error: {}"
+                        .format(message, received_message['error']))
+            elif received_message.has_key('result'):
+                return received_message['result']
         except queue.Empty:
             return None
         finally:
             self.receive_loop.method_results.pop(self.action_id)
+
+    def send_v2(self, method, **params):
+        self.action_id += 1
+        self.receive_loop.method_results[self.action_id] = queue.Queue()
+        message = {
+            'id': self.action_id,
+            'method': method,
+            'params': params
+        }
+        self._ws.send(json.dumps(message))
+        def _received_message(block=True, timeout=None):
+            try:
+            received_message = self.receive_loop.method_results[self.action_id].get(
+                block=block, timeout=timeout)
+            if received_message.has_key('error'):
+                raise Exception("Error when message sent: {}\n Error: {}"
+                        .format(message, received_message['error']))
+            elif received_message.has_key('result'):
+                return received_message['result']
+            except queue.Empty:
+                return None
+            finally:
+                self.receive_loop.method_results.pop(self.action_id)
+        return _received_message
 
     def flatten_send(self, method, session_id, block=True, timeout=None, **params):
         try:
@@ -147,7 +177,7 @@ class ChromeRemote(object):
         rp = requests.get("{}/json/list".format(self.dev_url), json=True)
         return [ tab for tab in rp.json() if tab['type'] == 'page' ]
 
-    def choose_tab(self, target_id, flatten=True):
+    def choose_tab(self, target_id, flatten=False):
         self.send('Target.attachToTarget', targetId=target_id, flatten=flatten)
 
 
@@ -222,7 +252,7 @@ class Session:
             return result['result']
         finally:
             self.results.pop(self.action_id)
-
+    
     def flatten_send(self, method, block=True, timeout=None, **params):
         try:
             self.action_id += 1
