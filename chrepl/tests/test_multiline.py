@@ -1,5 +1,6 @@
 import unittest
-from repl import ismultiline
+
+from chrepl.console import ismultiline
 
 def terminals():
     return ''.join(set(ismultiline.PushdownAutomata.brackets +\
@@ -16,7 +17,7 @@ class DeleteNonterminals(unittest.TestCase):
         function() { console.log("Hello \\"world\\""); }
         """
         string = self.get_string(string)
-        self.assertEqual(string, '(){("")}')
+        assert string == '(){("")}'
 
 
 class TestTest(unittest.TestCase):
