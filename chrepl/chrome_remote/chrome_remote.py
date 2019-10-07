@@ -46,7 +46,9 @@ class ReceiveLoop(threading.Thread):
         if "method" in message:
             self.events.put(message)
         elif "id" in message and message["id"] in self.method_results:
-            self.method_results[message["id"]].put(message)
+            _queue = self.method_results[message["id"]]
+            _queue.put(message)
+            self.method_results.pop(message["id"])
 
     def run(self):
         while not self.stopped.is_set():
@@ -104,29 +106,7 @@ class ChromeRemote(object):
         self.event_handler.event_handlers = {}
         return True
 
-    def send(self, method, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.receive_loop.method_results[self.action_id] = queue.Queue()
-            message = {
-                'id': self.action_id,
-                'method': method,
-                'params': params
-            }
-            self._ws.send(json.dumps(message))
-            received_message = self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)
-            if received_message.has_key('error'):
-                raise Exception("Error when message sent: {}\n Error: {}"
-                        .format(message, received_message['error']))
-            elif received_message.has_key('result'):
-                return received_message['result']
-        except queue.Empty:
-            return None
-        finally:
-            self.receive_loop.method_results.pop(self.action_id)
-
-    def send_v2(self, method, **params):
+    def send(self, method, session_id=None, **params):
         self.action_id += 1
         self.receive_loop.method_results[self.action_id] = queue.Queue()
         message = {
@@ -134,39 +114,11 @@ class ChromeRemote(object):
             'method': method,
             'params': params
         }
-        self._ws.send(json.dumps(message))
-        def _received_message(block=True, timeout=None):
-            try:
-            received_message = self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)
-            if received_message.has_key('error'):
-                raise Exception("Error when message sent: {}\n Error: {}"
-                        .format(message, received_message['error']))
-            elif received_message.has_key('result'):
-                return received_message['result']
-            except queue.Empty:
-                return None
-            finally:
-                self.receive_loop.method_results.pop(self.action_id)
-        return _received_message
-
-    def flatten_send(self, method, session_id, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.receive_loop.method_results[self.action_id] = queue.Queue()
-            message = {
-                'sessionId': session_id,
-                'id': self.action_id,
-                'method': method,
-                'params': params
-            }
-            self._ws.send(json.dumps(message).encode('utf-8'))
-            return self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)['result']
-        except queue.Empty:
-            return None
-        finally:
-            self.receive_loop.method_results.pop(self.action_id)
+        if session_id is not None:
+            message['sessionId'] = session_id
+        self._ws.send(json.dumps(message).encode('utf-8'))
+        _queue = self.receive_loop.method_results[self.action_id]
+        return _queue
 
     def attach_to_browser_target(self):
         # it does not work
@@ -236,40 +188,9 @@ class Session:
         self.event_handler.event_handlers = {}
         return True
 
-    def send(self, method, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.results[self.action_id] = queue.Queue()
-
-            message = json.dumps({
-                'id': self.action_id,
-                'method': method,
-                'params': params
-            })
-            self.browser.send('Target.sendMessageToTarget', block=block,
-                            sessionId=self.id, message=message)
-            result = self.results[self.action_id].get()
-            return result['result']
-        finally:
-            self.results.pop(self.action_id)
+    def send(self, method, **params):
+        return self.browser.send(method, self.id, **params)
     
-    def flatten_send(self, method, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.results[self.action_id] = queue.Queue()
-
-            #message = json.dumps({
-            #    'sessionId': self.id,
-            #    'id': self.action_id,
-            #    'method': method,
-            #    'params': params
-            #})
-            self.browser.flatten_send(method, self.id, block=block, **params)
-            result = self.results[self.action_id].get()
-            return result['result']
-        finally:
-            self.results.pop(self.action_id)
-
     def evaluate(self, expression):
         return self.send('Runtime.evaluate', expression=expression,
             includeCommandLineAPI=True)
@@ -279,13 +200,10 @@ if __name__ == '__main__':
     cr = ChromeRemote()
     import ipdb; ipdb.set_trace()
 
-    #cr.attach_to_browser_target()
-
-
     tabs = cr.get_tabs()
     target_id = tabs[0]['id']
 
     cr.choose_tab(target_id, flatten=True)
-    cr.session.flatten_send('Page.navigate', url="https://www.google.com")
+    _q = cr.session.send('Page.navigate', url="https://www.tut.by")
 
     cr.session.send('Page.navigate', url="https://www.tut.by")
