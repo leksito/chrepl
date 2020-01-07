@@ -5,6 +5,8 @@ import requests
 import websocket
 import threading
 
+import logging
+
 try:
     import Queue as queue
 except ImportError:
@@ -14,7 +16,7 @@ TIMEOUT = 5
 
 class EventHandler(threading.Thread):
 
-    def __init__(self, events, event_handlers, stopped):
+    def __init__(self, events, event_handlers, stopped=threading.Event()):
 
         threading.Thread.__init__(self)
 
@@ -46,22 +48,29 @@ class ReceiveLoop(threading.Thread):
         if "method" in message:
             self.events.put(message)
         elif "id" in message and message["id"] in self.method_results:
-            self.method_results[message["id"]].put(message)
+            _queue = self.method_results[message["id"]]
+            _queue.put(message)
+            self.method_results.pop(message["id"])
 
     def run(self):
         while not self.stopped.is_set():
             try:
+                logging.getLogger(type(self).__name__).debug("receive message")
                 message = json.loads(self._ws.recv())
+                logging.getLogger(type(self).__name__).debug(message)
+                    
                 self._process_message(message)
             except Exception as error:
-                raise error
+                logging.getLogger(type(self).__name__).exception(error)
 
 
 class ChromeRemote(object):
 
-    def __init__(self, host='http://localhost', port=9222):
+    def __init__(self, host='http://localhost', port=9222, debug=False):
         self.dev_url = "{}:{}".format(host, port)
         rp = requests.get("{}/json/version".format(self.dev_url), json=True)
+
+        self._debug = debug
 
         self._ws_url = rp.json()["webSocketDebuggerUrl"]
         self._ws = websocket.create_connection(self._ws_url, enable_multithread=True)
@@ -104,69 +113,23 @@ class ChromeRemote(object):
         self.event_handler.event_handlers = {}
         return True
 
-    def send(self, method, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.receive_loop.method_results[self.action_id] = queue.Queue()
-            message = {
-                'id': self.action_id,
-                'method': method,
-                'params': params
-            }
-            self._ws.send(json.dumps(message))
-            received_message = self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)
-            if received_message.has_key('error'):
-                raise Exception("Error when message sent: {}\n Error: {}"
-                        .format(message, received_message['error']))
-            elif received_message.has_key('result'):
-                return received_message['result']
-        except queue.Empty:
-            return None
-        finally:
-            self.receive_loop.method_results.pop(self.action_id)
-
-    def send_v2(self, method, **params):
+    def send(self, method, session_id=None, queue=queue.Queue(), **params):
         self.action_id += 1
-        self.receive_loop.method_results[self.action_id] = queue.Queue()
+        self.receive_loop.method_results[self.action_id] = queue
         message = {
             'id': self.action_id,
             'method': method,
             'params': params
         }
-        self._ws.send(json.dumps(message))
-        def _received_message(block=True, timeout=None):
-            try:
-            received_message = self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)
-            if received_message.has_key('error'):
-                raise Exception("Error when message sent: {}\n Error: {}"
-                        .format(message, received_message['error']))
-            elif received_message.has_key('result'):
-                return received_message['result']
-            except queue.Empty:
-                return None
-            finally:
-                self.receive_loop.method_results.pop(self.action_id)
-        return _received_message
+        if session_id is not None:
+            message['sessionId'] = session_id
+        
+        message = json.dumps(message).encode('utf-8')
+        logging.getLogger(type(self).__name__).debug(message)
 
-    def flatten_send(self, method, session_id, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.receive_loop.method_results[self.action_id] = queue.Queue()
-            message = {
-                'sessionId': session_id,
-                'id': self.action_id,
-                'method': method,
-                'params': params
-            }
-            self._ws.send(json.dumps(message).encode('utf-8'))
-            return self.receive_loop.method_results[self.action_id].get(
-                block=block, timeout=timeout)['result']
-        except queue.Empty:
-            return None
-        finally:
-            self.receive_loop.method_results.pop(self.action_id)
+        self._ws.send(message)
+        _queue = self.receive_loop.method_results[self.action_id]
+        return _queue
 
     def attach_to_browser_target(self):
         # it does not work
@@ -177,7 +140,7 @@ class ChromeRemote(object):
         rp = requests.get("{}/json/list".format(self.dev_url), json=True)
         return [ tab for tab in rp.json() if tab['type'] == 'page' ]
 
-    def choose_tab(self, target_id, flatten=False):
+    def choose_tab(self, target_id, flatten=True):
         self.send('Target.attachToTarget', targetId=target_id, flatten=flatten)
 
 
@@ -196,31 +159,18 @@ class SessionEventHandler(EventHandler):
 class Session:
     """Tab session"""
 
-    def __init__(self, session_id, browser):
+    def __init__(self, session_id, browser, events=queue.Queue()):
         self.id = session_id
         self.browser = browser
         self.action_id = 0
         self.results = {}
 
-        self.events = queue.Queue()
-
-        def receive_result(**kwargs):
-            session_id = kwargs.get('sessionId', '')
-            if not session_id or session_id != self.id:
-                raise RuntimeException("Wrong session id")
-            message = json.loads(kwargs.get('message', None))
-
-            if "method" in message:
-                self.events.put(message)
-            elif "id" in message and message["id"] in self.results:
-                self.results[message["id"]].put(message)
+        self.events = events
 
         self.event_handler = SessionEventHandler(events=self.events,
             event_handlers={}, stopped=self.browser.receive_loop.stopped)
         self.event_handler.daemon = True
         self.event_handler.start()
-
-        self.browser.on('Target.receivedMessageFromTarget', receive_result)
 
     def on(self, event, callback):
         if not callable(callback):
@@ -236,56 +186,22 @@ class Session:
         self.event_handler.event_handlers = {}
         return True
 
-    def send(self, method, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.results[self.action_id] = queue.Queue()
-
-            message = json.dumps({
-                'id': self.action_id,
-                'method': method,
-                'params': params
-            })
-            self.browser.send('Target.sendMessageToTarget', block=block,
-                            sessionId=self.id, message=message)
-            result = self.results[self.action_id].get()
-            return result['result']
-        finally:
-            self.results.pop(self.action_id)
+    def send(self, method, **params):
+        return self.browser.send(method, self.id, **params)
     
-    def flatten_send(self, method, block=True, timeout=None, **params):
-        try:
-            self.action_id += 1
-            self.results[self.action_id] = queue.Queue()
-
-            #message = json.dumps({
-            #    'sessionId': self.id,
-            #    'id': self.action_id,
-            #    'method': method,
-            #    'params': params
-            #})
-            self.browser.flatten_send(method, self.id, block=block, **params)
-            result = self.results[self.action_id].get()
-            return result['result']
-        finally:
-            self.results.pop(self.action_id)
-
-    def evaluate(self, expression):
+    def evaluate(self, expression, **kwargs):
         return self.send('Runtime.evaluate', expression=expression,
-            includeCommandLineAPI=True)
+            includeCommandLineAPI=True, **kwargs)
 
 
 if __name__ == '__main__':
-    cr = ChromeRemote()
+    cr = ChromeRemote(debug=True)
     import ipdb; ipdb.set_trace()
-
-    #cr.attach_to_browser_target()
-
 
     tabs = cr.get_tabs()
     target_id = tabs[0]['id']
 
     cr.choose_tab(target_id, flatten=True)
-    cr.session.flatten_send('Page.navigate', url="https://www.google.com")
+    _q = cr.session.send('Page.navigate', url="https://www.tut.by")
 
     cr.session.send('Page.navigate', url="https://www.tut.by")

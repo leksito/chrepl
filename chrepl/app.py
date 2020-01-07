@@ -1,16 +1,16 @@
 from functools import wraps
 
 from chrepl.console import Choice
-from chrepl.common.util import locked_print
+from chrepl.common.util import locked_print, trap_signals, SelectableQueue
 from chrepl.chrome_remote import ChromeRemote
 
 from termcolor import colored
 
-import abc, sys, json, re
-
 from pygments import highlight
 from pygments.formatters import TerminalFormatter
 from pygments.lexers import JavascriptLexer, HtmlLexer
+
+import abc, sys, json, re, logging
 
 
 class Executor(object):
@@ -38,7 +38,7 @@ class JSExecutor(Executor):
         self._chrome_client = chrome_client
 
     def execute(self, command):
-        return self._chrome_client.session.evaluate(expression=command)
+        return self._chrome_client.session.evaluate(expression=command, queue=SelectableQueue())
 
 
 class ExecutorFactory:
@@ -228,6 +228,7 @@ def console_log(**event):
     :returns: None
 
     """
+    import ipdb; ipdb.set_trace();
     message = event.get('message', None)
 
     if not message:
@@ -267,7 +268,14 @@ def pretty_print(class_name=None, value=None):
 
 
 def run():
-    chrome_client = ChromeRemote()
+
+    debug = True
+    logging_level = logging.DEBUG if debug else logging.ERROR
+    logging.basicConfig(level=logging_level)
+    
+    trap_signals()
+
+    chrome_client = ChromeRemote(debug=debug)
     tabs = chrome_client.get_tabs()
 
     answers = []
@@ -281,7 +289,7 @@ def run():
     choice = Choice(title="Choose target tab:", answers=answers).ask()
 
     target_id = tabs[choice[0]]['id']
-    chrome_client.choose_tab(target_id=target_id)
+    chrome_client.choose_tab(target_id=target_id, flatten=True)
     import time
     time.sleep(1)
 
@@ -296,8 +304,9 @@ def run():
     output_factory = OutputHandlerFactory(chrome_client)
     from console import Cmd
     for command in Cmd().cmd_generator():
-        result = command_factory.execute(command)
-        output = output_factory.process(result['result']) or {}
+        result = command_factory.execute(command).get()
+
+        output = output_factory.process(result['result']['result']) or {}
         pretty_print(**output)
 
 
