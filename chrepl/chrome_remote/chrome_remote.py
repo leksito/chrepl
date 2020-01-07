@@ -5,6 +5,8 @@ import requests
 import websocket
 import threading
 
+import logging
+
 try:
     import Queue as queue
 except ImportError:
@@ -14,7 +16,7 @@ TIMEOUT = 5
 
 class EventHandler(threading.Thread):
 
-    def __init__(self, events, event_handlers, stopped):
+    def __init__(self, events, event_handlers, stopped=threading.Event()):
 
         threading.Thread.__init__(self)
 
@@ -53,17 +55,22 @@ class ReceiveLoop(threading.Thread):
     def run(self):
         while not self.stopped.is_set():
             try:
+                logging.getLogger(type(self).__name__).debug("receive message")
                 message = json.loads(self._ws.recv())
+                logging.getLogger(type(self).__name__).debug(message)
+                    
                 self._process_message(message)
             except Exception as error:
-                raise error
+                logging.getLogger(type(self).__name__).exception(error)
 
 
 class ChromeRemote(object):
 
-    def __init__(self, host='http://localhost', port=9222):
+    def __init__(self, host='http://localhost', port=9222, debug=False):
         self.dev_url = "{}:{}".format(host, port)
         rp = requests.get("{}/json/version".format(self.dev_url), json=True)
+
+        self._debug = debug
 
         self._ws_url = rp.json()["webSocketDebuggerUrl"]
         self._ws = websocket.create_connection(self._ws_url, enable_multithread=True)
@@ -106,9 +113,9 @@ class ChromeRemote(object):
         self.event_handler.event_handlers = {}
         return True
 
-    def send(self, method, session_id=None, **params):
+    def send(self, method, session_id=None, queue=queue.Queue(), **params):
         self.action_id += 1
-        self.receive_loop.method_results[self.action_id] = queue.Queue()
+        self.receive_loop.method_results[self.action_id] = queue
         message = {
             'id': self.action_id,
             'method': method,
@@ -116,7 +123,11 @@ class ChromeRemote(object):
         }
         if session_id is not None:
             message['sessionId'] = session_id
-        self._ws.send(json.dumps(message).encode('utf-8'))
+        
+        message = json.dumps(message).encode('utf-8')
+        logging.getLogger(type(self).__name__).debug(message)
+
+        self._ws.send(message)
         _queue = self.receive_loop.method_results[self.action_id]
         return _queue
 
@@ -129,7 +140,7 @@ class ChromeRemote(object):
         rp = requests.get("{}/json/list".format(self.dev_url), json=True)
         return [ tab for tab in rp.json() if tab['type'] == 'page' ]
 
-    def choose_tab(self, target_id, flatten=False):
+    def choose_tab(self, target_id, flatten=True):
         self.send('Target.attachToTarget', targetId=target_id, flatten=flatten)
 
 
@@ -148,31 +159,18 @@ class SessionEventHandler(EventHandler):
 class Session:
     """Tab session"""
 
-    def __init__(self, session_id, browser):
+    def __init__(self, session_id, browser, events=queue.Queue()):
         self.id = session_id
         self.browser = browser
         self.action_id = 0
         self.results = {}
 
-        self.events = queue.Queue()
-
-        def receive_result(**kwargs):
-            session_id = kwargs.get('sessionId', '')
-            if not session_id or session_id != self.id:
-                raise RuntimeException("Wrong session id")
-            message = json.loads(kwargs.get('message', None))
-
-            if "method" in message:
-                self.events.put(message)
-            elif "id" in message and message["id"] in self.results:
-                self.results[message["id"]].put(message)
+        self.events = events
 
         self.event_handler = SessionEventHandler(events=self.events,
             event_handlers={}, stopped=self.browser.receive_loop.stopped)
         self.event_handler.daemon = True
         self.event_handler.start()
-
-        self.browser.on('Target.receivedMessageFromTarget', receive_result)
 
     def on(self, event, callback):
         if not callable(callback):
@@ -191,13 +189,13 @@ class Session:
     def send(self, method, **params):
         return self.browser.send(method, self.id, **params)
     
-    def evaluate(self, expression):
+    def evaluate(self, expression, **kwargs):
         return self.send('Runtime.evaluate', expression=expression,
-            includeCommandLineAPI=True)
+            includeCommandLineAPI=True, **kwargs)
 
 
 if __name__ == '__main__':
-    cr = ChromeRemote()
+    cr = ChromeRemote(debug=True)
     import ipdb; ipdb.set_trace()
 
     tabs = cr.get_tabs()

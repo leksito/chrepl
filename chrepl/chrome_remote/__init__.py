@@ -1,1 +1,2 @@
-from .chrome_remote import ChromeRemote
+from .chrome_remote import ChromeRemote, EventHandler
+
