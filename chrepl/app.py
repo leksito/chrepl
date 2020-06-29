@@ -129,8 +129,6 @@ class ObjectOutputHandler(object):
         attrs = " ".join(["{}=\"{}\"".format(attrs[i], attrs[i+1]) for i in range(0, len(attrs), 2)])
         value = "<{} {}>".format(local_name, attrs)
 
-        #highlight node
-
         highlightConfig = {
             "showInfo": True,
             "showRulers":False,
