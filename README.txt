@@ -1,1 +1,1 @@
-Chrepl - devtools
+Chrepl - devtools repl in terminal.
