@@ -267,7 +267,6 @@ def pretty_print(class_name=None, value=None):
 
 
 def run():
-
     debug = True
     logging_level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=logging_level)
