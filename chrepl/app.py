@@ -47,6 +47,7 @@ class ExecutorFactory:
     def __init__(self, chrome_client):
         executors = [c(chrome_client) for c in Executor.__subclasses__()]
         self.by_regex = {e for e in executors if hasattr(e, 'regex')}
+
         # default command is first command without regex
         self.default_executor = list(set(executors) - self.by_regex)[0]
 
